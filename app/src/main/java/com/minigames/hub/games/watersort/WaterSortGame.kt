@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -50,6 +51,7 @@ private val TubeBorder = Color(0x66FFFFFF)
 private val TubeBorderSelected = Color(0xFFFFC107)
 private val TubeBackground = Color(0x22FFFFFF)
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun WaterSortScreen() {
     val state = remember { WaterSortGameState() }
