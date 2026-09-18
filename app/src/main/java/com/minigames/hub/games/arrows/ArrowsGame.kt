@@ -1,5 +1,8 @@
 package com.minigames.hub.games.arrows
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1F
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -23,6 +26,8 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,15 +56,34 @@ class ArrowsGameModule : GameModule {
 
 private val ArrowColor = Color(0xFF37474F)
 private val BlockedColor = Color(0xFFD64545)
+private const val ExitAnimationMillis = 380
+
+private fun directionVector(direction: Direction): Pair<Float, Float> = when (direction) {
+    Direction.UP -> 0f to -1f
+    Direction.DOWN -> 0f to 1f
+    Direction.LEFT -> -1f to 0f
+    Direction.RIGHT -> 1f to 0f
+}
 
 @Composable
 fun ArrowsScreen() {
     val state = remember { ArrowsGameState() }
+    val exitAnimations = remember { mutableStateMapOf<Int, Animatable<Float, AnimationVector1F>>() }
 
     LaunchedEffect(state.lastBlockedId) {
         if (state.lastBlockedId != null) {
             delay(350)
             state.clearBlockedFlag()
+        }
+    }
+
+    state.exitingArrows.forEach { arrow ->
+        key(arrow.id) {
+            ArrowExitEffect(
+                arrowId = arrow.id,
+                exitAnimations = exitAnimations,
+                onFinished = { state.finishExit(arrow.id) }
+            )
         }
     }
 
@@ -94,15 +118,15 @@ fun ArrowsScreen() {
                         }
                 ) {
                     val cellPx = cellSize.toPx()
+                    val exitDistance = size.width + size.height
 
                     fun centerOf(cell: Cell) = Offset(
                         x = cell.col * cellPx + cellPx / 2f,
                         y = cell.row * cellPx + cellPx / 2f
                     )
 
-                    state.remainingArrows.forEach { arrow ->
-                        val color = if (arrow.id == state.lastBlockedId) BlockedColor else ArrowColor
-                        val points = arrow.cells.map { centerOf(it) }
+                    fun drawArrowPiece(arrow: ArrowPiece, color: Color, alpha: Float, translate: Offset) {
+                        val points = arrow.cells.map { centerOf(it) + translate }
 
                         for (i in 0 until points.size - 1) {
                             drawLine(
@@ -110,18 +134,14 @@ fun ArrowsScreen() {
                                 start = points[i],
                                 end = points[i + 1],
                                 strokeWidth = cellPx * 0.16f,
-                                cap = StrokeCap.Round
+                                cap = StrokeCap.Round,
+                                alpha = alpha
                             )
                         }
 
                         // Pfeilspitze etwas ueber das letzte Feld hinaus zeichnen
                         val headCenter = points.last()
-                        val (dx, dy) = when (arrow.direction) {
-                            Direction.UP -> 0f to -1f
-                            Direction.DOWN -> 0f to 1f
-                            Direction.LEFT -> -1f to 0f
-                            Direction.RIGHT -> 1f to 0f
-                        }
+                        val (dx, dy) = directionVector(arrow.direction)
                         val tipLength = cellPx * 0.55f
                         val tip = Offset(headCenter.x + dx * tipLength, headCenter.y + dy * tipLength)
                         drawLine(
@@ -129,7 +149,8 @@ fun ArrowsScreen() {
                             start = headCenter,
                             end = tip,
                             strokeWidth = cellPx * 0.16f,
-                            cap = StrokeCap.Round
+                            cap = StrokeCap.Round,
+                            alpha = alpha
                         )
 
                         val perpX = -dy
@@ -139,8 +160,20 @@ fun ArrowsScreen() {
                         val backY = tip.y - dy * wing * 1.4f
                         val left = Offset(backX + perpX * wing, backY + perpY * wing)
                         val right = Offset(backX - perpX * wing, backY - perpY * wing)
-                        drawLine(color, tip, left, strokeWidth = cellPx * 0.14f, cap = StrokeCap.Round)
-                        drawLine(color, tip, right, strokeWidth = cellPx * 0.14f, cap = StrokeCap.Round)
+                        drawLine(color, tip, left, strokeWidth = cellPx * 0.14f, cap = StrokeCap.Round, alpha = alpha)
+                        drawLine(color, tip, right, strokeWidth = cellPx * 0.14f, cap = StrokeCap.Round, alpha = alpha)
+                    }
+
+                    state.remainingArrows.forEach { arrow ->
+                        val color = if (arrow.id == state.lastBlockedId) BlockedColor else ArrowColor
+                        drawArrowPiece(arrow, color, alpha = 1f, translate = Offset.Zero)
+                    }
+
+                    state.exitingArrows.forEach { arrow ->
+                        val progress = exitAnimations[arrow.id]?.value ?: 0f
+                        val (dx, dy) = directionVector(arrow.direction)
+                        val translate = Offset(dx * exitDistance * progress, dy * exitDistance * progress)
+                        drawArrowPiece(arrow, ArrowColor, alpha = 1f - progress, translate = translate)
                     }
                 }
             }
@@ -170,6 +203,22 @@ fun ArrowsScreen() {
                 TextButton(onClick = { state.restart() }) { Text("Neu starten") }
             }
         )
+    }
+}
+
+/** Animiert einen Pfeil aus dem Feld heraus und meldet danach das Ende der Animation. */
+@Composable
+private fun ArrowExitEffect(
+    arrowId: Int,
+    exitAnimations: MutableMap<Int, Animatable<Float, AnimationVector1F>>,
+    onFinished: () -> Unit
+) {
+    LaunchedEffect(arrowId) {
+        val animatable = Animatable(0f)
+        exitAnimations[arrowId] = animatable
+        animatable.animateTo(targetValue = 1f, animationSpec = tween(durationMillis = ExitAnimationMillis))
+        exitAnimations.remove(arrowId)
+        onFinished()
     }
 }
 

@@ -102,6 +102,6 @@ class WaterSortGameState {
     }
 
     private fun checkWin() {
-        won = tubes.all { tube -> tube.isEmpty() || tube.distinct().size == 1 }
+        won = tubes.all { tube -> tube.isEmpty() || (tube.size == capacity && tube.distinct().size == 1) }
     }
 }

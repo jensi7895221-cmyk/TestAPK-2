@@ -22,6 +22,10 @@ class ArrowsGameState {
     var remainingArrows by mutableStateOf(level.arrows)
         private set
 
+    /** Pfeile, die gerade aus dem Feld hinausfliegen (fuer die Wegflug-Animation). */
+    var exitingArrows by mutableStateOf<List<ArrowPiece>>(emptyList())
+        private set
+
     var lives by mutableIntStateOf(level.lives)
         private set
 
@@ -40,6 +44,7 @@ class ArrowsGameState {
         levelIndex = safeIndex
         level = ArrowsLevels.all[safeIndex]
         remainingArrows = level.arrows
+        exitingArrows = emptyList()
         lives = level.lives
         score = 0
         status = ArrowsGameStatus.PLAYING
@@ -73,10 +78,16 @@ class ArrowsGameState {
         } else {
             lastBlockedId = null
             remainingArrows = remainingArrows.filter { it.id != id }
+            exitingArrows = exitingArrows + arrow
             score += 10
-            if (remainingArrows.isEmpty()) {
-                status = ArrowsGameStatus.WON
-            }
+        }
+    }
+
+    /** Wird aufgerufen, sobald die Wegflug-Animation eines Pfeils fertig ist. */
+    fun finishExit(id: Int) {
+        exitingArrows = exitingArrows.filter { it.id != id }
+        if (status == ArrowsGameStatus.PLAYING && remainingArrows.isEmpty() && exitingArrows.isEmpty()) {
+            status = ArrowsGameStatus.WON
         }
     }
 
