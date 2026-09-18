@@ -1,5 +1,7 @@
 package com.minigames.hub.games.arrows
 
+import android.media.AudioAttributes
+import android.media.SoundPool
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.tween
@@ -25,9 +27,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -36,15 +40,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.minigames.hub.R
 import com.minigames.hub.games.Difficulty
 import com.minigames.hub.games.DifficultyPicker
 import com.minigames.hub.games.GameInfo
 import com.minigames.hub.games.GameModule
 import kotlinx.coroutines.delay
+import kotlin.math.cos
+import kotlin.math.hypot
+import kotlin.math.sin
 
 class ArrowsGameModule : GameModule {
     override val info = GameInfo(
@@ -62,7 +72,40 @@ class ArrowsGameModule : GameModule {
 
 private val ArrowColor = Color(0xFF37474F)
 private val BlockedColor = Color(0xFFD64545)
+private val SuccessColor = Color(0xFF43A047)
 private const val ExitAnimationMillis = 380
+
+/** Laedt den Wegflug-Sound einmal und gibt eine Funktion zurueck, die ihn abspielt. */
+@Composable
+private fun rememberArrowSwooshPlayer(): () -> Unit {
+    val context = LocalContext.current
+    val soundPool = remember {
+        SoundPool.Builder()
+            .setMaxStreams(4)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_GAME)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                    .build()
+            )
+            .build()
+    }
+    var soundId by remember { mutableIntStateOf(0) }
+
+    LaunchedEffect(Unit) {
+        soundId = soundPool.load(context, R.raw.arrow_swoosh, 1)
+    }
+
+    DisposableEffect(Unit) {
+        onDispose { soundPool.release() }
+    }
+
+    return {
+        if (soundId != 0) {
+            soundPool.play(soundId, 1f, 1f, 0, 0, 1f)
+        }
+    }
+}
 
 private fun directionVector(direction: Direction): Pair<Float, Float> = when (direction) {
     Direction.UP -> 0f to -1f
@@ -104,6 +147,7 @@ private fun ArrowsGameplay(
 ) {
     val state = remember(difficulty) { ArrowsGameState(difficulty, startLevelIndex) }
     val exitAnimations = remember(difficulty) { mutableStateMapOf<Int, Animatable<Float, AnimationVector1D>>() }
+    val playSwoosh = rememberArrowSwooshPlayer()
 
     LaunchedEffect(state.levelIndex) {
         onLevelReached(state.levelIndex)
@@ -121,6 +165,7 @@ private fun ArrowsGameplay(
             ArrowExitEffect(
                 arrowId = arrow.id,
                 exitAnimations = exitAnimations,
+                onStart = playSwoosh,
                 onFinished = { state.finishExit(arrow.id) }
             )
         }
@@ -180,18 +225,98 @@ private fun ArrowsGameplay(
                         y = cell.row * cellPx + cellPx / 2f
                     )
 
+                    fun drawStar(center: Offset, outerRadius: Float, innerRadius: Float, color: Color, alpha: Float) {
+                        val spikes = 5
+                        val path = Path()
+                        for (i in 0 until spikes * 2) {
+                            val radius = if (i % 2 == 0) outerRadius else innerRadius
+                            val angle = (Math.PI / spikes) * i - Math.PI / 2
+                            val x = center.x + (radius * cos(angle)).toFloat()
+                            val y = center.y + (radius * sin(angle)).toFloat()
+                            if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+                        }
+                        path.close()
+                        drawPath(path, color = color, alpha = alpha)
+                    }
+
+                    fun drawRibs(points: List<Offset>, color: Color, alpha: Float) {
+                        val ribLength = cellPx * 0.26f
+                        for (i in 0 until points.size - 1) {
+                            val a = points[i]
+                            val b = points[i + 1]
+                            val dirX = b.x - a.x
+                            val dirY = b.y - a.y
+                            val len = hypot(dirX, dirY)
+                            if (len < 1f) continue
+                            val perpX = -dirY / len
+                            val perpY = dirX / len
+                            val ribCount = 3
+                            for (j in 1..ribCount) {
+                                val t = j / (ribCount + 1f)
+                                val cx = a.x + dirX * t
+                                val cy = a.y + dirY * t
+                                drawLine(
+                                    color = color,
+                                    start = Offset(cx - perpX * ribLength, cy - perpY * ribLength),
+                                    end = Offset(cx + perpX * ribLength, cy + perpY * ribLength),
+                                    strokeWidth = cellPx * 0.06f,
+                                    alpha = alpha
+                                )
+                            }
+                        }
+                    }
+
+                    fun drawZigzagSegment(a: Offset, b: Offset, color: Color, strokeWidth: Float, alpha: Float) {
+                        val dirX = b.x - a.x
+                        val dirY = b.y - a.y
+                        val len = hypot(dirX, dirY)
+                        if (len < 1f) {
+                            drawLine(color, a, b, strokeWidth = strokeWidth, cap = StrokeCap.Round, alpha = alpha)
+                            return
+                        }
+                        val perpX = -dirY / len
+                        val perpY = dirX / len
+                        val amplitude = cellPx * 0.13f
+                        val segments = 4
+                        var prev = a
+                        for (i in 1..segments) {
+                            val t = i / segments.toFloat()
+                            val baseX = a.x + dirX * t
+                            val baseY = a.y + dirY * t
+                            val point = if (i == segments) {
+                                Offset(baseX, baseY)
+                            } else {
+                                val side = if (i % 2 == 0) 1f else -1f
+                                Offset(baseX + perpX * amplitude * side, baseY + perpY * amplitude * side)
+                            }
+                            drawLine(color = color, start = prev, end = point, strokeWidth = strokeWidth, cap = StrokeCap.Round, alpha = alpha)
+                            prev = point
+                        }
+                    }
+
                     fun drawArrowPiece(arrow: ArrowPiece, color: Color, alpha: Float, translate: Offset) {
                         val points = arrow.cells.map { centerOf(it) + translate }
+                        val strokeWidth = cellPx * 0.16f
 
-                        for (i in 0 until points.size - 1) {
-                            drawLine(
-                                color = color,
-                                start = points[i],
-                                end = points[i + 1],
-                                strokeWidth = cellPx * 0.16f,
-                                cap = StrokeCap.Round,
-                                alpha = alpha
-                            )
+                        if (arrow.style == ArrowStyle.ZIGZAG) {
+                            for (i in 0 until points.size - 1) {
+                                drawZigzagSegment(points[i], points[i + 1], color, strokeWidth, alpha)
+                            }
+                        } else {
+                            for (i in 0 until points.size - 1) {
+                                drawLine(
+                                    color = color,
+                                    start = points[i],
+                                    end = points[i + 1],
+                                    strokeWidth = strokeWidth,
+                                    cap = StrokeCap.Round,
+                                    alpha = alpha
+                                )
+                            }
+                        }
+
+                        if (arrow.style == ArrowStyle.RIBBED) {
+                            drawRibs(points, color, alpha)
                         }
 
                         // Pfeilspitze etwas ueber das letzte Feld hinaus zeichnen
@@ -203,20 +328,30 @@ private fun ArrowsGameplay(
                             color = color,
                             start = headCenter,
                             end = tip,
-                            strokeWidth = cellPx * 0.16f,
+                            strokeWidth = strokeWidth,
                             cap = StrokeCap.Round,
                             alpha = alpha
                         )
 
-                        val perpX = -dy
-                        val perpY = dx
-                        val wing = cellPx * 0.22f
-                        val backX = tip.x - dx * wing * 1.4f
-                        val backY = tip.y - dy * wing * 1.4f
-                        val left = Offset(backX + perpX * wing, backY + perpY * wing)
-                        val right = Offset(backX - perpX * wing, backY - perpY * wing)
-                        drawLine(color, tip, left, strokeWidth = cellPx * 0.14f, cap = StrokeCap.Round, alpha = alpha)
-                        drawLine(color, tip, right, strokeWidth = cellPx * 0.14f, cap = StrokeCap.Round, alpha = alpha)
+                        when (arrow.style) {
+                            ArrowStyle.ROUND -> {
+                                drawCircle(color = color, radius = cellPx * 0.22f, center = tip, alpha = alpha)
+                            }
+                            ArrowStyle.STAR -> {
+                                drawStar(center = tip, outerRadius = cellPx * 0.30f, innerRadius = cellPx * 0.13f, color = color, alpha = alpha)
+                            }
+                            else -> {
+                                val perpX = -dy
+                                val perpY = dx
+                                val wing = cellPx * 0.22f
+                                val backX = tip.x - dx * wing * 1.4f
+                                val backY = tip.y - dy * wing * 1.4f
+                                val left = Offset(backX + perpX * wing, backY + perpY * wing)
+                                val right = Offset(backX - perpX * wing, backY - perpY * wing)
+                                drawLine(color, tip, left, strokeWidth = cellPx * 0.14f, cap = StrokeCap.Round, alpha = alpha)
+                                drawLine(color, tip, right, strokeWidth = cellPx * 0.14f, cap = StrokeCap.Round, alpha = alpha)
+                            }
+                        }
                     }
 
                     state.remainingArrows.forEach { arrow ->
@@ -228,7 +363,7 @@ private fun ArrowsGameplay(
                         val progress = exitAnimations[arrow.id]?.value ?: 0f
                         val (dx, dy) = directionVector(arrow.direction)
                         val translate = Offset(dx * exitDistance * progress, dy * exitDistance * progress)
-                        drawArrowPiece(arrow, ArrowColor, alpha = 1f - progress, translate = translate)
+                        drawArrowPiece(arrow, SuccessColor, alpha = 1f - progress, translate = translate)
                     }
                 }
             }
@@ -261,14 +396,16 @@ private fun ArrowsGameplay(
     }
 }
 
-/** Animiert einen Pfeil aus dem Feld heraus und meldet danach das Ende der Animation. */
+/** Animiert einen Pfeil aus dem Feld heraus, spielt den Zisch-Sound ab und meldet danach das Ende. */
 @Composable
 private fun ArrowExitEffect(
     arrowId: Int,
     exitAnimations: MutableMap<Int, Animatable<Float, AnimationVector1D>>,
+    onStart: () -> Unit,
     onFinished: () -> Unit
 ) {
     LaunchedEffect(arrowId) {
+        onStart()
         val animatable = Animatable(0f)
         exitAnimations[arrowId] = animatable
         animatable.animateTo(targetValue = 1f, animationSpec = tween(durationMillis = ExitAnimationMillis))
