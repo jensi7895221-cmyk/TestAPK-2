@@ -4,20 +4,24 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.minigames.hub.games.Difficulty
 
 /**
- * Haelt den kompletten Spielzustand fuer ein Level.
- * Wird ueber remember { WaterSortGameState() } in der Composable erzeugt.
+ * Haelt den kompletten Spielzustand fuer ein Level einer Schwierigkeitsstufe.
+ * Wird ueber remember { WaterSortGameState(difficulty) } in der Composable erzeugt.
  */
-class WaterSortGameState {
+class WaterSortGameState(private val difficulty: Difficulty, startLevelIndex: Int = 0) {
 
-    var levelIndex by mutableIntStateOf(0)
+    private val levels = WaterSortLevels.forDifficulty(difficulty)
+    val totalLevels: Int get() = levels.size
+
+    var levelIndex by mutableIntStateOf(startLevelIndex.coerceIn(levels.indices))
         private set
 
-    var capacity by mutableIntStateOf(WaterSortLevels.all[0].tubeCapacity)
+    var capacity by mutableIntStateOf(levels[levelIndex].tubeCapacity)
         private set
 
-    var tubes by mutableStateOf(WaterSortLevels.all[0].tubes)
+    var tubes by mutableStateOf(levels[levelIndex].tubes)
         private set
 
     var selectedTube by mutableStateOf<Int?>(null)
@@ -30,8 +34,8 @@ class WaterSortGameState {
         private set
 
     fun loadLevel(index: Int) {
-        val safeIndex = index.coerceIn(WaterSortLevels.all.indices)
-        val level = WaterSortLevels.all[safeIndex]
+        val safeIndex = index.coerceIn(levels.indices)
+        val level = levels[safeIndex]
         levelIndex = safeIndex
         capacity = level.tubeCapacity
         tubes = level.tubes
@@ -43,7 +47,7 @@ class WaterSortGameState {
     fun restart() = loadLevel(levelIndex)
 
     fun nextLevel() {
-        if (levelIndex < WaterSortLevels.all.lastIndex) {
+        if (levelIndex < levels.lastIndex) {
             loadLevel(levelIndex + 1)
         } else {
             loadLevel(0)

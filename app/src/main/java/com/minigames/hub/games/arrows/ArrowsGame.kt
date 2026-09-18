@@ -26,16 +26,22 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.minigames.hub.games.Difficulty
+import com.minigames.hub.games.DifficultyPicker
 import com.minigames.hub.games.GameInfo
 import com.minigames.hub.games.GameModule
 import kotlinx.coroutines.delay
@@ -67,8 +73,41 @@ private fun directionVector(direction: Direction): Pair<Float, Float> = when (di
 
 @Composable
 fun ArrowsScreen() {
-    val state = remember { ArrowsGameState() }
-    val exitAnimations = remember { mutableStateMapOf<Int, Animatable<Float, AnimationVector1D>>() }
+    var selectedDifficulty by remember { mutableStateOf<Difficulty?>(null) }
+    val reachedLevel = remember { mutableStateMapOf<Difficulty, Int>() }
+
+    val difficulty = selectedDifficulty
+    if (difficulty == null) {
+        DifficultyPicker(
+            description = "Tippe auf die Pfeile, um sie vom Brett zu schiessen, aber stelle sicher, dass ihr Weg frei ist. Einige Pfeile blockieren andere, waehle die richtige Reihenfolge, um jedes Level zu raeumen.",
+            resumeLevel = { d -> (reachedLevel[d] ?: 0) + 1 },
+            onStart = { d -> selectedDifficulty = d }
+        )
+    } else {
+        ArrowsGameplay(
+            difficulty = difficulty,
+            startLevelIndex = reachedLevel[difficulty] ?: 0,
+            onLevelReached = { index ->
+                reachedLevel[difficulty] = maxOf(reachedLevel[difficulty] ?: 0, index)
+            },
+            onChangeDifficulty = { selectedDifficulty = null }
+        )
+    }
+}
+
+@Composable
+private fun ArrowsGameplay(
+    difficulty: Difficulty,
+    startLevelIndex: Int,
+    onLevelReached: (Int) -> Unit,
+    onChangeDifficulty: () -> Unit
+) {
+    val state = remember(difficulty) { ArrowsGameState(difficulty, startLevelIndex) }
+    val exitAnimations = remember(difficulty) { mutableStateMapOf<Int, Animatable<Float, AnimationVector1D>>() }
+
+    LaunchedEffect(state.levelIndex) {
+        onLevelReached(state.levelIndex)
+    }
 
     LaunchedEffect(state.lastBlockedId) {
         if (state.lastBlockedId != null) {
@@ -88,6 +127,22 @@ fun ArrowsScreen() {
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = difficulty.label,
+                color = difficulty.color,
+                fontWeight = FontWeight.ExtraBold,
+                style = MaterialTheme.typography.labelLarge
+            )
+            TextButton(onClick = onChangeDifficulty) {
+                Text("Schwierigkeit wechseln")
+            }
+        }
+
         ArrowsHeader(state = state)
 
         Box(
@@ -242,7 +297,7 @@ private fun ArrowsHeader(state: ArrowsGameState) {
         }
 
         Text(
-            text = "Level ${state.levelIndex + 1} / ${ArrowsLevels.all.size}   Punkte: ${state.score}",
+            text = "Level ${state.levelIndex + 1} / ${state.totalLevels}   Punkte: ${state.score}",
             style = MaterialTheme.typography.bodyLarge
         )
 

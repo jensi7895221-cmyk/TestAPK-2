@@ -4,19 +4,23 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.minigames.hub.games.Difficulty
 
 enum class ArrowsGameStatus { PLAYING, WON, LOST }
 
 /**
- * Haelt den kompletten Spielzustand fuer ein Level.
- * Wird ueber remember { ArrowsGameState() } in der Composable erzeugt.
+ * Haelt den kompletten Spielzustand fuer ein Level einer Schwierigkeitsstufe.
+ * Wird ueber remember { ArrowsGameState(difficulty) } in der Composable erzeugt.
  */
-class ArrowsGameState {
+class ArrowsGameState(private val difficulty: Difficulty, startLevelIndex: Int = 0) {
 
-    var levelIndex by mutableIntStateOf(0)
+    private val levels = ArrowsLevels.forDifficulty(difficulty)
+    val totalLevels: Int get() = levels.size
+
+    var levelIndex by mutableIntStateOf(startLevelIndex.coerceIn(levels.indices))
         private set
 
-    var level by mutableStateOf(ArrowsLevels.all[0])
+    var level by mutableStateOf(levels[levelIndex])
         private set
 
     var remainingArrows by mutableStateOf(level.arrows)
@@ -40,9 +44,9 @@ class ArrowsGameState {
         private set
 
     fun loadLevel(index: Int) {
-        val safeIndex = index.coerceIn(ArrowsLevels.all.indices)
+        val safeIndex = index.coerceIn(levels.indices)
         levelIndex = safeIndex
-        level = ArrowsLevels.all[safeIndex]
+        level = levels[safeIndex]
         remainingArrows = level.arrows
         exitingArrows = emptyList()
         lives = level.lives
@@ -54,7 +58,7 @@ class ArrowsGameState {
     fun restart() = loadLevel(levelIndex)
 
     fun nextLevel() {
-        if (levelIndex < ArrowsLevels.all.lastIndex) {
+        if (levelIndex < levels.lastIndex) {
             loadLevel(levelIndex + 1)
         } else {
             loadLevel(0)

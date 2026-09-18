@@ -24,12 +24,20 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.minigames.hub.games.Difficulty
+import com.minigames.hub.games.DifficultyPicker
 import com.minigames.hub.games.GameInfo
 import com.minigames.hub.games.GameModule
 
@@ -51,10 +59,43 @@ private val TubeBorder = Color(0x66FFFFFF)
 private val TubeBorderSelected = Color(0xFFFFC107)
 private val TubeBackground = Color(0x22FFFFFF)
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun WaterSortScreen() {
-    val state = remember { WaterSortGameState() }
+    var selectedDifficulty by remember { mutableStateOf<Difficulty?>(null) }
+    val reachedLevel = remember { mutableStateMapOf<Difficulty, Int>() }
+
+    val difficulty = selectedDifficulty
+    if (difficulty == null) {
+        DifficultyPicker(
+            description = "Schuette Fluessigkeit von einem Glas ins naechste, bis jede Farbe komplett in einem eigenen Glas landet.",
+            resumeLevel = { d -> (reachedLevel[d] ?: 0) + 1 },
+            onStart = { d -> selectedDifficulty = d }
+        )
+    } else {
+        WaterSortGameplay(
+            difficulty = difficulty,
+            startLevelIndex = reachedLevel[difficulty] ?: 0,
+            onLevelReached = { index ->
+                reachedLevel[difficulty] = maxOf(reachedLevel[difficulty] ?: 0, index)
+            },
+            onChangeDifficulty = { selectedDifficulty = null }
+        )
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun WaterSortGameplay(
+    difficulty: Difficulty,
+    startLevelIndex: Int,
+    onLevelReached: (Int) -> Unit,
+    onChangeDifficulty: () -> Unit
+) {
+    val state = remember(difficulty) { WaterSortGameState(difficulty, startLevelIndex) }
+
+    LaunchedEffect(state.levelIndex) {
+        onLevelReached(state.levelIndex)
+    }
 
     Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
         Row(
@@ -63,7 +104,23 @@ fun WaterSortScreen() {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
-                text = "Level ${state.levelIndex + 1} / ${WaterSortLevels.all.size}   Zuege: ${state.moves}",
+                text = difficulty.label,
+                color = difficulty.color,
+                fontWeight = FontWeight.ExtraBold,
+                style = MaterialTheme.typography.labelLarge
+            )
+            TextButton(onClick = onChangeDifficulty) {
+                Text("Schwierigkeit wechseln")
+            }
+        }
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Level ${state.levelIndex + 1} / ${state.totalLevels}   Zuege: ${state.moves}",
                 style = MaterialTheme.typography.bodyLarge
             )
             IconButton(onClick = { state.restart() }) {
