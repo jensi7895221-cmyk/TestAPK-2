@@ -32,11 +32,20 @@ jobs:
       - name: Debug APK bauen
         run: |
           set +e
-          ./gradlew assembleDebug --no-daemon --console=plain --stacktrace -Pkotlin.compiler.execution.strategy=in-process > build.log 2>&1
+          date +%s > /tmp/build_start_ts
+          ./gradlew assembleDebug --no-daemon --console=plain --stacktrace > build.log 2>&1
           status=$?
           if [ $status -ne 0 ]; then
             echo "::group::Fehlerkontext (um FAILED/Exception/e: Zeilen)"
             grep -n -B10 -A40 -iE "FAILED$|^e: |Caused by|Exception|error:" build.log || tail -n 200 build.log
+            echo "::endgroup::"
+
+            echo "::group::Kotlin Daemon Logs"
+            start_ts=$(cat /tmp/build_start_ts)
+            find /tmp "$HOME" -maxdepth 6 -iname "*kotlin-daemon*" -newer /tmp/build_start_ts 2>/dev/null | while read -r f; do
+              echo "--- $f ---"
+              cat "$f"
+            done
             echo "::endgroup::"
           fi
           exit $status
