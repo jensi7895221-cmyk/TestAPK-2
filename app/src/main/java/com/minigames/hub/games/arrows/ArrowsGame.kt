@@ -1,7 +1,7 @@
 package com.minigames.hub.games.arrows
 
 import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.AnimationVector1F
+import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -68,7 +68,7 @@ private fun directionVector(direction: Direction): Pair<Float, Float> = when (di
 @Composable
 fun ArrowsScreen() {
     val state = remember { ArrowsGameState() }
-    val exitAnimations = remember { mutableStateMapOf<Int, Animatable<Float, AnimationVector1F>>() }
+    val exitAnimations = remember { mutableStateMapOf<Int, Animatable<Float, AnimationVector1D>>() }
 
     LaunchedEffect(state.lastBlockedId) {
         if (state.lastBlockedId != null) {
@@ -210,7 +210,7 @@ fun ArrowsScreen() {
 @Composable
 private fun ArrowExitEffect(
     arrowId: Int,
-    exitAnimations: MutableMap<Int, Animatable<Float, AnimationVector1F>>,
+    exitAnimations: MutableMap<Int, Animatable<Float, AnimationVector1D>>,
     onFinished: () -> Unit
 ) {
     LaunchedEffect(arrowId) {
