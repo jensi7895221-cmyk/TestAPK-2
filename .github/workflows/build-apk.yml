@@ -20,8 +20,9 @@ jobs:
 
       - name: Android SDK Pakete installieren
         run: |
-          yes | sdkmanager --licenses >/dev/null || true
-          sdkmanager "platform-tools" "platforms;android-34" "build-tools;34.0.0"
+          SDKMANAGER=$(find "$ANDROID_HOME/cmdline-tools" -name sdkmanager | head -n1)
+          yes | "$SDKMANAGER" --licenses >/dev/null || true
+          "$SDKMANAGER" "platform-tools" "platforms;android-34" "build-tools;34.0.0"
         env:
           ANDROID_HOME: /usr/local/lib/android/sdk
 
