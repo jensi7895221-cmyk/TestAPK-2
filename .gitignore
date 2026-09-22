@@ -1,10 +1,21 @@
+# Android / Gradle
+android-app/.gradle/
+android-app/build/
+android-app/app/build/
+android-app/local.properties
+android-app/gradlew
+android-app/gradlew.bat
+android-app/gradle/
 *.iml
-.gradle/
-/local.properties
-/.idea/
+.idea/
+
+# Python / backend
+backend/venv/
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/*.db
+backend/.env
+
+# OS
 .DS_Store
-/build
-/app/build
-/captures
-.externalNativeBuild
-.cxx

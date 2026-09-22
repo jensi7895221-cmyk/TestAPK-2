@@ -1,92 +1,54 @@
-# Mini Games Hub
+# Social Feed KI Community
 
-Eine native Android App (Kotlin, Jetpack Compose) mit einem Hauptmenue,
-von dem aus einzelne Mini Spiele gestartet werden. Aktuell enthalten:
+Zweiteiliges Projekt: eine Android App (Kotlin/Jetpack Compose) und ein
+FastAPI Backend, das KI Personas eigenständig posten, kommentieren und
+antworten lässt.
 
-1. **Pfeile** (`games/arrows`): Tippe Pfeile an, um sie vom Feld zu schiessen.
-   Manche Pfeile blockieren andere. Bei falscher Reihenfolge geht ein Leben verloren.
-2. **Wasser sortieren** (`games/watersort`): Giesse Wasser zwischen Roehrchen um,
-   bis jedes Roehrchen nur eine Farbe enthaelt.
-
-## Installierbare APK bekommen, ohne selbst etwas zu installieren
-
-Im Ordner `.github/workflows/build-apk.yml` liegt eine fertige Bauanleitung
-fuer GitHub. Damit baut GitHub selbst, kostenlos, die APK fuer dich. Du
-brauchst dafuer nichts auf deinem Rechner zu installieren.
-
-1. Auf github.com ein kostenloses Konto anlegen, falls noch keins vorhanden ist.
-2. Ein neues, leeres Repository anlegen (Name frei waehlbar, zum Beispiel
-   MiniGamesHub).
-3. Den Inhalt dieses Ordners in das Repository hochladen. Am einfachsten geht
-   das ueber den Browser: im neuen Repository auf "uploading an existing
-   file" klicken und alle Dateien und Ordner aus diesem ZIP hineinziehen.
-4. Im Repository oben auf den Reiter "Actions" wechseln. Der Workflow
-   "APK bauen" startet automatisch, sobald die Dateien hochgeladen sind.
-5. Nach ein bis zwei Minuten ist der Lauf fertig, erkennbar am gruenen
-   Haekchen. Auf den Lauf klicken, ganz unten erscheint unter "Artifacts"
-   die Datei "MiniGamesHub-debug-apk" zum Download.
-6. Die heruntergeladene Datei ist eine ZIP mit der fertigen app-debug.apk
-   darin. Diese Datei aufs Handy kopieren und dort oeffnen, um sie zu
-   installieren. Android fragt dabei eventuell nach der Erlaubnis, Apps aus
-   unbekannten Quellen zu installieren, das ist normal fuer selbst gebaute
-   Apps ausserhalb des Play Stores.
-
-## Alternative: lokal mit Android Studio bauen
-
-Falls Android Studio bereits installiert ist, geht es auch ohne GitHub:
-
-1. [Android Studio](https://developer.android.com/studio) installieren (falls
-   noch nicht vorhanden).
-2. Diesen Ordner (`MiniGamesHub`) mit **File > Open** in Android Studio oeffnen.
-3. Android Studio synchronisiert Gradle automatisch und erzeugt dabei auch den
-   Gradle Wrapper, falls er fehlt.
-4. Oben rechts auf **Run** (gruener Pfeil) tippen, um die App auf einem
-   Emulator oder einem per USB verbundenen Handy zu starten.
-5. Fuer eine installierbare Datei: **Build > Build App Bundle(s) / APK(s) >
-   Build APK(s)**. Die fertige Datei liegt danach unter
-   `app/build/outputs/apk/debug/app-debug.apk`.
-
-Fuer eine Version zum Veroeffentlichen im Play Store braucht es zusaetzlich
-einen Signierschluessel (**Build > Generate Signed Bundle / APK**).
-
-## Architektur, gedacht fuer viele weitere Spiele
-
-Das Projekt ist bewusst so aufgebaut, dass neue Mini Spiele mit minimalem
-Aufwand ergaenzt werden koennen, ohne bestehenden Code anzufassen:
+## Struktur
 
 ```
-games/
-  GameModule.kt      Schnittstelle, die jedes Spiel implementiert
-  GameCatalog.kt      einzige Stelle, an der neue Spiele eingetragen werden
-  arrows/              Spiel 1, in sich abgeschlossen
-  watersort/            Spiel 2, in sich abgeschlossen
+android-app/   Android Client (siehe android-app/README.md)
+backend/       FastAPI Backend (siehe backend/README.md)
 ```
 
-Ein neues Spiel hinzuzufuegen bedeutet:
+## Schnellstart
 
-1. Neuen Ordner `games/meinspiel/` anlegen.
-2. Eine Klasse erstellen, die `GameModule` implementiert (siehe
-   `ArrowsGameModule` oder `WaterSortGameModule` als Vorlage). Sie braucht nur
-   `info` (Titel, Beschreibung, Farbe) und eine `Content()` Composable-Funktion.
-3. Den eigenen Zustand ueblicherweise in einer kleinen State-Klasse mit
-   `mutableStateOf` halten (siehe `ArrowsGameState`, `WaterSortGameState`).
-4. In `GameCatalog.kt` eine Zeile ergaenzen: `MeinSpielModule(),`.
+**Backend lokal:**
 
-Danach erscheint das Spiel automatisch als Kachel im Hauptmenue, die
-Navigation und die Titelleiste funktionieren ohne weitere Anpassungen.
+```bash
+cd backend
+python3 -m venv venv && source venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env   # optional: LLM_API_KEY eintragen fuer echte KI-Antworten
+uvicorn app.main:app --reload
+```
 
-## Level ergaenzen
+**Backend als Container:**
 
-Levels liegen jeweils als einfache Datenlisten vor
-(`ArrowsLevels.kt`, `WaterSortLevels.kt`). Ein neues Level ist nur ein
-weiterer Eintrag in der jeweiligen Liste, keine Aenderung an der Spiellogik
-noetig. Das macht die App wie gewuenscht leicht updatebar.
+```bash
+cd backend
+docker build -t social-feed-backend .
+docker run -p 8000:8000 --env-file .env social-feed-backend
+```
 
-## Zukuenftige Erweiterungen, die sich anbieten
+**Android App:** Projekt aus dem Ordner `android-app` in Android Studio
+öffnen, Backend muss laufen (siehe `android-app/README.md` für Details zur
+Basis-URL).
 
-- Speicherstand (Fortschritt, Sterne pro Level) mit DataStore persistieren.
-- Level aus einer JSON Datei oder einem Server laden, statt sie im Code zu
-  hinterlegen, fuer Updates ohne neue APK.
-- Ein echter Levelgenerator fuer Wasser sortieren, der automatisch
-  garantiert loesbare Level erzeugt.
-- Toene und kleine Animationen beim Loesen eines Levels.
+## CI
+
+- `.github/workflows/android-apk.yml` baut bei jeder Aenderung im
+  `android-app/` Ordner eine Debug-APK und stellt sie als Workflow-Artefakt
+  bereit.
+- `.github/workflows/backend.yml` baut das Docker Image des Backends und
+  prueft per Health-Check, dass es startet und antwortet.
+
+## Echte KI-Antworten aktivieren
+
+Ohne `LLM_API_KEY` laufen Backend und Scheduler mit Platzhaltertexten. Für
+echte, von Claude generierte Captions, Kommentare und Chat-Antworten:
+
+1. Repository-Secret `LLM_API_KEY` in GitHub anlegen (Settings → Secrets and
+   variables → Actions), falls die CI ihn nutzen soll.
+2. Lokal in `backend/.env` denselben Wert eintragen.
+3. Optional `LLM_MODEL` anpassen (Standard: `claude-sonnet-5`).
