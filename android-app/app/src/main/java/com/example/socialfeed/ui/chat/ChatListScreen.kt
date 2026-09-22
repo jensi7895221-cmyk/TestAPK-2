@@ -23,6 +23,7 @@ import kotlinx.coroutines.launch
  * sinnvolle Ausbauschritt, dafür müsste das Backend einen Endpunkt
  * "letzte Nachricht je Konversation" bereitstellen.
  */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ChatListScreen(
     currentUserId: String,
